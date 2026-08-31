@@ -2,6 +2,19 @@
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/kushagrabansal-IOT/AI-Student-Assistant)
 
+## 🌐 Live Demo
+
+**Deployed on Vercel — open from your phone:**
+
+🔗 **[ai-student-assistant-kushagrabansal94-3596.vercel.app](https://ai-student-assistant-kushagrabansal94-3596.vercel.app)**
+
+> ⚠️ AI responses require `AI_API_KEY` to be configured in Vercel environment variables.
+> The app loads, chat history, search, and delete all work without a key.
+> To enable AI: go to [Vercel Dashboard → ai-student-assistant → Settings → Environment Variables](https://vercel.com/kushagrabansal94-3596/ai-student-assistant/settings/environment-variables) and add `AI_API_KEY`.
+
+---
+
+
 > **Your AI-powered learning companion** — a web application that lets students ask questions, get clear AI-generated explanations, and review their learning history.
 
 ---

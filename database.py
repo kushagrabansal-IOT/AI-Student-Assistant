@@ -10,7 +10,12 @@ import os
 from datetime import datetime
 
 # Database path — stored in /database/ folder
-DB_PATH = os.path.join(os.path.dirname(__file__), "database", "assistant.db")
+# Vercel has a read-only filesystem; /tmp is the only writable directory.
+# Locally, store alongside the project in database/assistant.db.
+if os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"):
+    DB_PATH = "/tmp/assistant.db"
+else:
+    DB_PATH = os.path.join(os.path.dirname(__file__), "database", "assistant.db")
 
 
 def get_connection():

@@ -224,6 +224,39 @@ def status():
 # ENTRY POINT
 # ═════════════════════════════════════════════════════════════════════════
 
+
+@app.route("/api/debug/ai", methods=["GET"])
+def debug_ai():
+    """GET /api/debug/ai — test the AI key and return the raw result (no secrets exposed)."""
+    import os
+    key     = os.environ.get("AI_API_KEY", "")
+    base_url= os.environ.get("AI_API_BASE_URL", "https://api.openai.com/v1")
+    model   = os.environ.get("AI_MODEL", "gpt-4o-mini")
+
+    info = {
+        "key_present":  bool(key),
+        "key_prefix":   (key[:6] + "...") if key else "NOT SET",
+        "base_url":     base_url,
+        "model":        model,
+        "test_result":  None,
+        "error":        None,
+    }
+
+    if key:
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=key, base_url=base_url)
+            resp   = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": "Reply with exactly: OK"}],
+                max_tokens=5,
+            )
+            info["test_result"] = resp.choices[0].message.content.strip()
+        except Exception as e:
+            info["error"] = type(e).__name__ + ": " + str(e)[:300]
+
+    return jsonify(info)
+
 if __name__ == "__main__":
     db.init_db()
     port  = int(os.environ.get("PORT", 5000))

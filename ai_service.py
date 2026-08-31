@@ -9,13 +9,6 @@ If no key is configured, a clear user-facing error is returned.
 """
 
 import os
-from typing import Generator
-
-# ── Configuration (read from environment) ────────────────────────────────
-
-AI_API_KEY      = os.environ.get("AI_API_KEY", "")
-AI_API_BASE_URL = os.environ.get("AI_API_BASE_URL", "https://api.openai.com/v1")
-AI_MODEL        = os.environ.get("AI_MODEL", "gpt-4o-mini")
 
 # System prompt — makes the AI behave as an educational tutor
 SYSTEM_PROMPT = """You are an AI Student Assistant — a helpful, patient, and encouraging educational tutor.
@@ -53,13 +46,19 @@ class AIServiceNotConfigured(AIServiceError):
 
 
 def is_configured() -> bool:
-    """Return True if an API key is present in the environment."""
-    return bool(AI_API_KEY and AI_API_KEY.strip())
+    """Return True if an API key is present in the environment.
+    Reads from environment at call time (safe for Vercel serverless cold starts).
+    """
+    key = os.environ.get("AI_API_KEY", "")
+    return bool(key and key.strip())
 
 
 def get_ai_response(messages: list[dict]) -> str:
     """
     Send a conversation history to the AI and return the assistant's reply.
+
+    Reads all configuration from environment variables at call time —
+    this ensures Vercel serverless functions always use the latest values.
 
     Parameters
     ----------
@@ -75,7 +74,12 @@ def get_ai_response(messages: list[dict]) -> str:
     AIServiceNotConfigured — if AI_API_KEY is not set.
     AIServiceError         — if the API call fails for any reason.
     """
-    if not is_configured():
+    # Read env vars at call time (not module load time)
+    api_key  = os.environ.get("AI_API_KEY", "")
+    base_url = os.environ.get("AI_API_BASE_URL", "https://api.openai.com/v1")
+    model    = os.environ.get("AI_MODEL", "gpt-4o-mini")
+
+    if not (api_key and api_key.strip()):
         raise AIServiceNotConfigured(
             "AI_API_KEY is not configured. "
             "Please set the AI_API_KEY environment variable. "
@@ -89,12 +93,12 @@ def get_ai_response(messages: list[dict]) -> str:
         from openai import OpenAI, APIError, AuthenticationError, RateLimitError
 
         client = OpenAI(
-            api_key=AI_API_KEY,
-            base_url=AI_API_BASE_URL,
+            api_key=api_key,
+            base_url=base_url,
         )
 
         response = client.chat.completions.create(
-            model=AI_MODEL,
+            model=model,
             messages=full_messages,
             max_tokens=2048,
             temperature=0.7,
@@ -107,25 +111,44 @@ def get_ai_response(messages: list[dict]) -> str:
             "The 'openai' Python package is not installed. "
             "Run: pip install openai"
         )
+
     except AuthenticationError:
         raise AIServiceError(
-            "Invalid AI_API_KEY. Please check that your API key is correct."
+            "Invalid API key. Please check that your AI_API_KEY environment "
+            "variable is set correctly in Vercel."
         )
-    except RateLimitError:
-        raise AIServiceError(
-            "AI API rate limit reached. Please wait a moment and try again."
-        )
+
+    except RateLimitError as e:
+        # OpenAI uses RateLimitError for both rate limiting AND quota exhaustion.
+        # Check the error body to give a more helpful message.
+        err_body = getattr(e, "body", {}) or {}
+        err_code = err_body.get("error", {}).get("code", "") if isinstance(err_body, dict) else ""
+
+        if err_code == "insufficient_quota" or "quota" in str(e).lower() or "billing" in str(e).lower():
+            raise AIServiceError(
+                "OpenAI quota exhausted. Your account has no remaining credits. "
+                "Please add a payment method at platform.openai.com → Billing, "
+                "then redeploy the app."
+            )
+        else:
+            raise AIServiceError(
+                "AI API rate limit reached. Please wait a moment and try again. "
+                "(Free-tier accounts allow 3 requests/min for gpt-4o-mini.)"
+            )
+
     except APIError as e:
         raise AIServiceError(f"AI API error: {str(e)}")
+
     except Exception as e:
         raise AIServiceError(f"Unexpected error communicating with AI: {str(e)}")
 
 
 def get_config_info() -> dict:
     """Return safe (non-secret) configuration info for debugging."""
+    key = os.environ.get("AI_API_KEY", "")
     return {
-        "configured":   is_configured(),
-        "base_url":     AI_API_BASE_URL,
-        "model":        AI_MODEL,
-        "key_preview":  (AI_API_KEY[:6] + "…") if is_configured() else "NOT SET",
+        "configured": is_configured(),
+        "base_url":   os.environ.get("AI_API_BASE_URL", "https://api.openai.com/v1"),
+        "model":      os.environ.get("AI_MODEL", "gpt-4o-mini"),
+        "key_preview": (key[:6] + "\u2026") if key else "NOT SET",
     }
